@@ -1,79 +1,181 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageIntro from "../../components/site/PageIntro";
-import { company, packages, pricing, checkout } from "../../content/site";
+import { Icon } from "../../components/Icon";
+import { privateApi } from "../../api";
+import { authUrl, paymentUrl } from "../../api/endpoints";
+import { checkout, packages, pricing } from "../../content/site";
 
 const money = (n) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const num = (n) => n.toLocaleString("en-US");
 
+const PAYPAL_CLIENT_ID = process.env.REACT_APP_PAYPAL_CLIENT_ID;
+
+// Loaded once and reused across mounts (e.g. navigating away and back).
+let paypalSdkPromise = null;
+function loadPayPalSdk() {
+  if (window.paypal) return Promise.resolve(window.paypal);
+  if (paypalSdkPromise) return paypalSdkPromise;
+
+  paypalSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
+      PAYPAL_CLIENT_ID
+    )}&currency=USD&intent=capture`;
+    script.onload = () => resolve(window.paypal);
+    script.onerror = () => reject(new Error("Failed to load the PayPal SDK"));
+    document.body.appendChild(script);
+  });
+
+  return paypalSdkPromise;
+}
+
 export default function BuyCreditsPage({ user }) {
   const [selected, setSelected] = useState(packages[2].credits);
-  const [email, setEmail] = useState(user?.email || "");
-  const [couponInput, setCouponInput] = useState("");
-  const [coupon, setCoupon] = useState("");
+  const [balance, setBalance] = useState(null);
+  const [sdkState, setSdkState] = useState("loading"); // loading | ready | failed
+  const [processing, setProcessing] = useState(false);
+  const [completed, setCompleted] = useState(null); // { credits, balance }
+
+  const mountRef = useRef(null);
+  const buttonsRef = useRef(null);
+  // createOrder is called from inside the PayPal SDK's own closure, created
+  // once below - it reads the selection through this ref so switching
+  // packages doesn't require tearing down and re-rendering the buttons.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   const pack = useMemo(
     () => packages.find((p) => p.credits === selected),
     [selected]
   );
   const totalCredits = pack.credits + (pack.bonus || 0);
-  const checkoutReady = Boolean(checkout.paypalUrl);
 
-  const applyCoupon = (e) => {
-    e.preventDefault();
-    const code = couponInput.trim().toUpperCase();
-    if (!code) return;
-    setCoupon(code);
-    toast.info(`Coupon ${code} will be applied at checkout.`);
-  };
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
 
-  const proceed = (e) => {
-    e.preventDefault();
-    const account = email.trim();
-    if (!account) {
-      toast.error("Enter the email address on your Linkdexing account.");
-      return;
-    }
-
-    if (checkoutReady) {
-      const q = new URLSearchParams({
-        email: account,
-        credits: String(pack.credits),
-        amount: String(pack.price),
-        ...(coupon ? { coupon } : {}),
+    privateApi
+      .get(`${authUrl}/credits`)
+      .then((res) => {
+        if (!cancelled) setBalance(res.data.balance);
+      })
+      .catch(() => {
+        // Non-fatal - the balance pill just stays hidden.
       });
-      window.location.assign(`${checkout.paypalUrl}?${q.toString()}`);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    if (!PAYPAL_CLIENT_ID) {
+      setSdkState("failed");
       return;
     }
 
-    // Online checkout is not connected yet (V2, Feature 1). Until it is,
-    // hand the order to support by email so nobody hits a dead end.
-    const subject = `Credit purchase: ${num(pack.credits)} links (${money(
-      pack.price
-    )})`;
-    const body = [
-      `Linkdexing account: ${account}`,
-      `Package: ${num(pack.credits)} links credit${
-        pack.bonus ? ` (+${num(pack.bonus)} bonus)` : ""
-      }`,
-      `Amount: ${money(pack.price)}`,
-      coupon ? `Coupon: ${coupon}` : null,
-      "",
-      "Please send me a PayPal payment link for this package.",
-    ]
-      .filter((line) => line !== null)
-      .join("\n");
+    let cancelled = false;
 
-    window.location.assign(
-      `mailto:${company.supportEmail}?subject=${encodeURIComponent(
-        subject
-      )}&body=${encodeURIComponent(body)}`
+    loadPayPalSdk()
+      .then((paypal) => {
+        if (cancelled || !mountRef.current) return;
+
+        const buttons = paypal.Buttons({
+          style: { layout: "horizontal", height: 45, tagline: false },
+
+          createOrder: async () => {
+            setProcessing(true);
+            try {
+              const res = await privateApi.post(`${paymentUrl}/create-order`, {
+                credits: selectedRef.current,
+              });
+              return res.data.paypalOrderId;
+            } catch (err) {
+              toast.error(
+                err.response?.data?.message || "Could not start checkout."
+              );
+              throw err;
+            } finally {
+              setProcessing(false);
+            }
+          },
+
+          onApprove: async (data) => {
+            setProcessing(true);
+            try {
+              const res = await privateApi.post(
+                `${paymentUrl}/capture-order`,
+                { paypalOrderId: data.orderID }
+              );
+              const finished = packages.find(
+                (p) => p.credits === selectedRef.current
+              );
+              setBalance(res.data.balance);
+              setCompleted({
+                credits: finished.credits + (finished.bonus || 0),
+                balance: res.data.balance,
+              });
+              toast.success("Payment complete — credits added.");
+            } catch (err) {
+              toast.error(
+                err.response?.data?.message ||
+                  "Payment approved but we couldn't confirm it. Contact support with your PayPal receipt."
+              );
+            } finally {
+              setProcessing(false);
+            }
+          },
+
+          onCancel: () => toast.info("Checkout cancelled."),
+
+          onError: (err) => {
+            console.error(err);
+            toast.error("PayPal checkout hit an error. Please try again.");
+          },
+        });
+
+        buttonsRef.current = buttons;
+        buttons.render(mountRef.current);
+        setSdkState("ready");
+      })
+      .catch(() => setSdkState("failed"));
+
+    return () => {
+      cancelled = true;
+      buttonsRef.current?.close?.().catch(() => {});
+    };
+    // Buttons are created once for the session; createOrder always reads the
+    // current selection via selectedRef, so `selected` isn't a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  if (completed) {
+    return (
+      <section className="section">
+        <div className="wrap">
+          <div className="purchase-success">
+            <div className="ico">
+              <Icon name="check" size={28} />
+            </div>
+            <h1 className="display display-md">
+              {num(completed.credits)} credits added.
+            </h1>
+            <p className="lede" style={{ margin: "12px auto 28px" }}>
+              Your new balance is {num(completed.balance)} credits.
+            </p>
+            <Link to="/dashboard" className="btn-solid btn-lg">
+              Go to your dashboard
+            </Link>
+          </div>
+        </div>
+      </section>
     );
-    toast.info(
-      "We've opened an email to support with your order. They'll reply with a PayPal link."
-    );
-  };
+  }
 
   return (
     <>
@@ -82,7 +184,7 @@ export default function BuyCreditsPage({ user }) {
         title="Buy link credits."
         lede={`1 credit = 1 link submission, at $${pricing.perCreditUsd.toFixed(
           2
-        )} per link. Pick a package, pay through PayPal, and the credits are added to your account. They never expire.`}
+        )} per link. Pick a package, pay through PayPal, and the credits are added to your account instantly. They never expire.`}
       />
 
       <section className="section-tight">
@@ -97,7 +199,13 @@ export default function BuyCreditsPage({ user }) {
             </div>
           )}
 
-          <form className="checkout" onSubmit={proceed}>
+          {user && balance !== null && (
+            <div className="balance-pill">
+              Current balance: <b>{num(balance)} credits</b>
+            </div>
+          )}
+
+          <div className="checkout">
             <div
               className="packages"
               role="radiogroup"
@@ -113,6 +221,7 @@ export default function BuyCreditsPage({ user }) {
                     aria-checked={active}
                     className={`package${active ? " is-selected" : ""}`}
                     onClick={() => setSelected(p.credits)}
+                    disabled={processing}
                   >
                     <span className="radio" aria-hidden="true" />
                     <span>
@@ -138,42 +247,17 @@ export default function BuyCreditsPage({ user }) {
             <aside className="summary">
               <h3>Your order</h3>
 
-              <div className="field">
-                <label htmlFor="account-email">
-                  Linkdexing account email
-                </label>
-                <input
-                  id="account-email"
-                  type="email"
-                  className="form-control"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="coupon">Coupon code</label>
-                <div className="coupon">
-                  <input
-                    id="coupon"
-                    type="text"
-                    className="form-control"
-                    placeholder="Optional"
-                    value={couponInput}
-                    onChange={(e) => setCouponInput(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={applyCoupon}
-                  >
-                    Apply
-                  </button>
+              {user ? (
+                <p className="buyer">
+                  Buying as <b>{user.email}</b>
+                </p>
+              ) : (
+                <div className="notice">
+                  <Link to="/login">Log in</Link> or{" "}
+                  <Link to="/register">create an account</Link> to buy
+                  credits.
                 </div>
-              </div>
+              )}
 
               <div className="lines">
                 <div className="line">
@@ -186,31 +270,37 @@ export default function BuyCreditsPage({ user }) {
                     <span>+{num(pack.bonus)}</span>
                   </div>
                 )}
-                {coupon && (
-                  <div className="line">
-                    <span>Coupon</span>
-                    <span>{coupon}</span>
-                  </div>
-                )}
                 <div className="line total">
                   <span>Total</span>
                   <span>{money(pack.price)}</span>
                 </div>
               </div>
 
-              <button type="submit" className="btn-solid btn-lg btn-block">
-                Proceed to PayPal
-              </button>
-
-              <p className="muted fine">
-                {checkoutReady
-                  ? `Payments are processed by PayPal. ${num(
-                      totalCredits
-                    )} credits will be added to the account above once the payment clears.`
-                  : "Online checkout is being connected. For now this sends your order to support by email and they'll reply with a PayPal link."}
-              </p>
+              {user && (
+                <>
+                  <div
+                    ref={mountRef}
+                    className={`paypal-mount${
+                      sdkState !== "ready" ? " is-loading" : ""
+                    }`}
+                  >
+                    {sdkState === "loading" && "Loading payment options…"}
+                    {sdkState === "failed" && (
+                      <span className="error">
+                        Couldn't load PayPal checkout. Refresh the page to
+                        try again.
+                      </span>
+                    )}
+                  </div>
+                  <p className="muted fine" style={{ marginTop: 14 }}>
+                    Payments are processed by PayPal. {num(totalCredits)}{" "}
+                    credits are added to your account the moment the payment
+                    clears.
+                  </p>
+                </>
+              )}
             </aside>
-          </form>
+          </div>
         </div>
       </section>
     </>

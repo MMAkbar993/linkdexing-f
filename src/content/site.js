@@ -32,10 +32,6 @@ export const packages = [
 ];
 
 export const checkout = {
-  // TODO (V2, Feature 1): set this to the PayPal checkout endpoint once the
-  // backend integration exists. While it is empty, "Proceed to PayPal" hands
-  // the order to support by email instead.
-  paypalUrl: "",
   // TODO: URL of the UPI / net-banking checkout for customers in India. The
   // old WordPress page linked to one; the banner is hidden while this is empty.
   indiaUrl: "",

@@ -343,3 +343,23 @@ a:hover { color: var(--green); }
 .auth-form .otp { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 22px; letter-spacing: 0.35em; text-align: center; }
 .auth-form .otp::-webkit-outer-spin-button, .auth-form .otp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .auth-form .btn-quiet { margin-top: 10px; width: 100%; }
+
+/* Buy Credits — PayPal checkout ------------------------------------------- */
+.balance-pill {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2);
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 999px;
+  padding: 8px 16px; margin-bottom: 28px;
+}
+.balance-pill b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.paypal-mount { margin-top: 8px; min-height: 47px; }
+.paypal-mount.is-loading {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--paper-2); border-radius: var(--radius); font-size: 14px; color: var(--muted);
+}
+.summary .buyer { font-size: 14px; color: var(--ink-2); margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.summary .buyer b { color: var(--ink); }
+.purchase-success { text-align: center; padding: 40px 24px; }
+.purchase-success .ico {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--green-soft); color: var(--green-2);
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;
+}

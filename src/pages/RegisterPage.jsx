@@ -45,12 +45,6 @@ export default function RegisterPage({ setRefresh }) {
       // Create the account
       const { data } = await publicApi.post(authUrl, values);
 
-      // Add the contact to Sendinblue. Marketing side-effect only, so a
-      // failure here must not abort the registration.
-      try {
-        await publicApi.get(`${authUrl}/createContactInSib/${data.user._id}`);
-      } catch (err) {}
-
       toast.success("Registered successfully");
 
       // Send the verification code

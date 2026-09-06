@@ -24,12 +24,6 @@ const VerificationPage = ({ user, setRefresh }) => {
         otp: otp.toString(),
       });
       toast.success("Account verified");
-
-      // Add the contact to the Sendinblue list. Non-fatal.
-      try {
-        await publicApi.get(`${authUrl}/addContactToSibList/${user._id}`);
-      } catch (err) {}
-
       setRefresh(true);
     } catch (err) {
       toast.error(
