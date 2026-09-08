@@ -25,7 +25,9 @@ export default function DashboardPage() {
       //Reset form
       reset();
     } catch (err) {
-      toast.error("Unable to create order");
+      toast.error(
+        err.response?.data?.message || "Unable to create order"
+      );
     } finally {
       setLoading(false);
     }

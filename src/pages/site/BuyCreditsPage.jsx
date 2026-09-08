@@ -11,6 +11,20 @@ const money = (n) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const num = (n) => n.toLocaleString("en-US");
 
+const TX_LABELS = {
+  purchase: "Purchase",
+  link_submission: "Links submitted",
+  admin_adjustment: "Manual adjustment",
+  refund: "Refund",
+};
+
+const formatDate = (d) =>
+  new Date(d).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
 const PAYPAL_CLIENT_ID = process.env.REACT_APP_PAYPAL_CLIENT_ID;
 
 // Loaded once and reused across mounts (e.g. navigating away and back).
@@ -35,6 +49,7 @@ function loadPayPalSdk() {
 export default function BuyCreditsPage({ user }) {
   const [selected, setSelected] = useState(packages[2].credits);
   const [balance, setBalance] = useState(null);
+  const [transactions, setTransactions] = useState([]);
   const [sdkState, setSdkState] = useState("loading"); // loading | ready | failed
   const [processing, setProcessing] = useState(false);
   const [completed, setCompleted] = useState(null); // { credits, balance }
@@ -60,10 +75,12 @@ export default function BuyCreditsPage({ user }) {
     privateApi
       .get(`${authUrl}/credits`)
       .then((res) => {
-        if (!cancelled) setBalance(res.data.balance);
+        if (cancelled) return;
+        setBalance(res.data.balance);
+        setTransactions(res.data.transactions || []);
       })
       .catch(() => {
-        // Non-fatal - the balance pill just stays hidden.
+        // Non-fatal - the balance pill and history just stay hidden.
       });
 
     return () => {
@@ -121,6 +138,13 @@ export default function BuyCreditsPage({ user }) {
                 balance: res.data.balance,
               });
               toast.success("Payment complete — credits added.");
+
+              // Refresh history so the purchase just made shows up right
+              // away, without needing a reload.
+              privateApi
+                .get(`${authUrl}/credits`)
+                .then((r) => setTransactions(r.data.transactions || []))
+                .catch(() => {});
             } catch (err) {
               toast.error(
                 err.response?.data?.message ||
@@ -172,6 +196,7 @@ export default function BuyCreditsPage({ user }) {
               Go to your dashboard
             </Link>
           </div>
+          <CreditHistory transactions={transactions} />
         </div>
       </section>
     );
@@ -301,8 +326,65 @@ export default function BuyCreditsPage({ user }) {
               )}
             </aside>
           </div>
+
+          {user && <CreditHistory transactions={transactions} />}
         </div>
       </section>
     </>
+  );
+}
+
+// Recent credit activity: purchases, links submitted, and any manual
+// adjustments made by an admin — everything that has touched the balance.
+function CreditHistory({ transactions }) {
+  return (
+    <div style={{ marginTop: 40 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>
+        Recent activity
+      </h3>
+      {transactions.length === 0 ? (
+        <p className="muted fine">
+          Nothing yet — your purchases and link submissions will show up
+          here.
+        </p>
+      ) : (
+        <div className="table-wrap">
+          <table className="compare" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Activity</th>
+                <th scope="col" style={{ textAlign: "right" }}>
+                  Change
+                </th>
+                <th scope="col" style={{ textAlign: "right" }}>
+                  Balance after
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t._id}>
+                  <td>{formatDate(t.createdAt)}</td>
+                  <td>{TX_LABELS[t.type] || t.type}</td>
+                  <td
+                    style={{
+                      textAlign: "right",
+                      color: t.amount > 0 ? "var(--green-2)" : "var(--ink-2)",
+                    }}
+                  >
+                    {t.amount > 0 ? "+" : ""}
+                    {num(t.amount)}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {num(t.balanceAfter)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
