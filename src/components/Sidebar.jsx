@@ -13,17 +13,22 @@ const links = [
 const num = (n) => (n ?? 0).toLocaleString("en-US");
 
 const Sidebar = () => {
-  const [balance, setBalance] = useState(null);
+  const [stats, setStats] = useState(null); // { balance, creditsPurchased, totalLinks }
 
   useEffect(() => {
     let cancelled = false;
     privateApi
       .get(`${authUrl}/credits`)
       .then((res) => {
-        if (!cancelled) setBalance(res.data.balance);
+        if (cancelled) return;
+        setStats({
+          balance: res.data.balance,
+          creditsPurchased: res.data.creditsPurchased,
+          totalLinks: res.data.totalLinks,
+        });
       })
       .catch(() => {
-        // Non-fatal - the sidebar still works without the balance shown.
+        // Non-fatal - the sidebar still works without these numbers shown.
       });
     return () => {
       cancelled = true;
@@ -35,7 +40,7 @@ const Sidebar = () => {
       <div>
         <h1 className='display-6 lead'>Your Account</h1>
 
-        {balance !== null && (
+        {stats && (
           <div
             className='mb-3 p-3'
             style={{
@@ -48,7 +53,21 @@ const Sidebar = () => {
               Credit balance
             </div>
             <div style={{ fontSize: "1.6rem", fontWeight: 600 }}>
-              {num(balance)}
+              {num(stats.balance)}
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                paddingTop: 8,
+                borderTop: "1px solid #e5e8eb",
+                fontSize: "0.8rem",
+                color: "#6b7681",
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>{num(stats.creditsPurchased)} purchased</span>
+              <span>{num(stats.totalLinks)} used</span>
             </div>
           </div>
         )}
