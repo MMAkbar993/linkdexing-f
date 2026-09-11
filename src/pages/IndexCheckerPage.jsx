@@ -198,6 +198,7 @@ export default function IndexCheckerPage() {
                   <th>URLs</th>
                   <th>Indexed</th>
                   <th>Not indexed</th>
+                  <th>% Indexed</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -207,11 +208,16 @@ export default function IndexCheckerPage() {
                   <tr key={b._id}>
                     <td>{moment(b.createdAt).format("DD-MM-YY HH:mm")}</td>
                     <td>
-                      {b.source === "archive" ? "Submitted links" : "Standalone"}
+                      {b.source === "archive" ? "Link Archive" : "Standalone"}
                     </td>
                     <td>{num(b.totalUrls)}</td>
                     <td>{num(b.indexedCount)}</td>
                     <td>{num(b.notIndexedCount)}</td>
+                    <td>
+                      {b.totalUrls > 0
+                        ? `${Math.round((b.indexedCount / b.totalUrls) * 100)}%`
+                        : "—"}
+                    </td>
                     <td>
                       {b.status === "completed" && (
                         <span className='badge bg-success'>Done</span>
@@ -266,6 +272,14 @@ export default function IndexCheckerPage() {
                           {c.result === "pending" && (
                             <span className='badge bg-warning text-dark'>
                               Checking…
+                            </span>
+                          )}
+                          {c.result === "unmatched" && (
+                            <span
+                              className='badge bg-secondary'
+                              title="IndexChecker.link couldn't confirm a result for this exact URL."
+                            >
+                              Could not verify
                             </span>
                           )}
                         </td>

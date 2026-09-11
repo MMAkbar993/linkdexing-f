@@ -5,7 +5,7 @@
 // URL is dropped rather than silently submitted, so a stray header or a
 // blank trailing line can't turn into a wasted credit.
 
-const URL_LIKE = /^(https?:\/\/|www\.)\S+$/i;
+export const URL_LIKE = /^(https?:\/\/|www\.)\S+$/i;
 
 export function parseUrlsFromText(text) {
   const cells = String(text)

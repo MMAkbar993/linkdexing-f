@@ -4,7 +4,7 @@ import { privateApi } from "../api";
 import { authUrl } from "../api/endpoints";
 
 const links = [
-  { link: "/dashboard", label: "Add Links" },
+  { link: "/dashboard", label: "Link Indexer" },
   { link: "/links-archive", label: "Links Archive" },
   { link: "/index-checker", label: "Index Checker" },
   { link: "/change-password", label: "Change Password" },

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 import { privateApi } from "../api";
 import { orderUrl } from "../api/endpoints";
-import { readCsvFile } from "../utils/csv";
+import { readCsvFile, URL_LIKE } from "../utils/csv";
 import Sidebar from "../components/Sidebar";
 
 // Dashboard or Home page
@@ -118,8 +118,28 @@ export default function DashboardPage() {
                       aria-label='With textarea'
                       {...register("links", {
                         required: true,
+                        // Each non-blank line must look like a real URL -
+                        // otherwise it can silently sit unmatched later, when
+                        // an index check runs against it (IndexChecker.link
+                        // still "checks" malformed input, but the result can
+                        // never be matched back to it).
+                        validate: (value) => {
+                          const lines = value
+                            .split("\n")
+                            .map((l) => l.trim())
+                            .filter(Boolean);
+                          return (
+                            lines.every((l) => URL_LIKE.test(l)) ||
+                            "Every line must be a full URL, starting with http://, https://, or www."
+                          );
+                        },
                       })}
                     ></textarea>
+                    {errors?.links?.message && (
+                      <div className='text-danger mt-1'>
+                        {errors.links.message}
+                      </div>
+                    )}
                   </div>
                   <div className='mt-2'>
                     <input
