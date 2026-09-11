@@ -1,20 +1,52 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 import { privateApi } from "../api";
 import { orderUrl } from "../api/endpoints";
+import { readCsvFile } from "../utils/csv";
 import Sidebar from "../components/Sidebar";
 
 // Dashboard or Home page
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
+  const fileRef = useRef(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm();
+
+  // Appends URLs from a CSV/txt file into the same textarea the user would
+  // otherwise paste into, so both input methods feed one submission path.
+  const handleCsv = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await readCsvFile(file);
+      if (result.urls.length === 0) {
+        toast.error("No valid URLs found in that file.");
+        return;
+      }
+      const existing = (getValues("links") || "").trim();
+      setValue(
+        "links",
+        existing ? `${existing}\n${result.urls.join("\n")}` : result.urls.join("\n"),
+        { shouldValidate: true }
+      );
+      toast.success(
+        `Loaded ${result.urls.length.toLocaleString("en-US")} link(s)` +
+          (result.skipped ? `, skipped ${result.skipped} non-URL row(s)` : "")
+      );
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const onSubmit = async (values) => {
     setLoading(true);
@@ -88,6 +120,26 @@ export default function DashboardPage() {
                         required: true,
                       })}
                     ></textarea>
+                  </div>
+                  <div className='mt-2'>
+                    <input
+                      ref={fileRef}
+                      type='file'
+                      accept='.csv,.txt'
+                      onChange={handleCsv}
+                      style={{ display: "none" }}
+                    />
+                    <button
+                      type='button'
+                      className='btn btn-outline-secondary btn-sm'
+                      onClick={() => fileRef.current?.click()}
+                      disabled={loading}
+                    >
+                      Upload CSV
+                    </button>
+                    <small className='text-muted ms-2'>
+                      One URL per line, or a single-column CSV.
+                    </small>
                   </div>
                 </div>
                 <div className='mb-3'>

@@ -6,6 +6,7 @@ import { authUrl } from "../api/endpoints";
 const links = [
   { link: "/dashboard", label: "Add Links" },
   { link: "/links-archive", label: "Links Archive" },
+  { link: "/index-checker", label: "Index Checker" },
   { link: "/change-password", label: "Change Password" },
   { link: "/buy-credits", label: "Buy Credits" },
 ];
