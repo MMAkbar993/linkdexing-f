@@ -7,6 +7,7 @@ const links = [
   { link: "/dashboard", label: "Link Indexer" },
   { link: "/links-archive", label: "Links Archive" },
   { link: "/index-checker", label: "Index Checker" },
+  { link: "/developer-api", label: "Developer API" },
   { link: "/change-password", label: "Change Password" },
   { link: "/buy-credits", label: "Buy Credits" },
 ];

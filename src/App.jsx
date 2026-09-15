@@ -7,6 +7,7 @@ import RegisterPage from "./pages/RegisterPage";
 import VerificationPage from "./pages/Verification";
 import LinksArchivePage from "./pages/LinksArchive";
 import IndexCheckerPage from "./pages/IndexCheckerPage";
+import DeveloperApiPage from "./pages/DeveloperApiPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
@@ -176,6 +177,12 @@ const App = () => {
               <PrivateRoute
                 path='/index-checker'
                 component={IndexCheckerPage}
+                user={user}
+                setRefresh={setRefresh}
+              />
+              <PrivateRoute
+                path='/developer-api'
+                component={DeveloperApiPage}
                 user={user}
                 setRefresh={setRefresh}
               />
