@@ -98,7 +98,7 @@ const ENDPOINTS = [
   {
     method: "POST",
     path: "/index-check",
-    summary: "Check whether any URL is indexed by Google. Costs 0.1 credit per URL by default (admin-adjustable).",
+    summary: "Check whether any URL is indexed by Google. Costs 0.1 credit per URL by default.",
     body: `{ "urls": ["https://example.com/page-1"] }`,
     curl: `curl -X POST ${API_BASE}/index-check \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"urls":["https://example.com/page-1"]}'`,
     response: `{
