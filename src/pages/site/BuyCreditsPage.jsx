@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import PageIntro from "../../components/site/PageIntro";
 import { Icon } from "../../components/Icon";
 import { privateApi } from "../../api";
-import { authUrl, paymentUrl } from "../../api/endpoints";
+import { authUrl, paymentUrl, couponUrl } from "../../api/endpoints";
 import { checkout, packages, pricing } from "../../content/site";
 
 const money = (n) =>
@@ -54,6 +54,11 @@ export default function BuyCreditsPage({ user }) {
   const [processing, setProcessing] = useState(false);
   const [completed, setCompleted] = useState(null); // { credits, balance }
 
+  const [couponInput, setCouponInput] = useState("");
+  const [couponStatus, setCouponStatus] = useState("idle"); // idle | checking | applied | error
+  const [couponError, setCouponError] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, originalPrice, discountAmount, finalPrice }
+
   const mountRef = useRef(null);
   const buttonsRef = useRef(null);
   // createOrder is called from inside the PayPal SDK's own closure, created
@@ -61,12 +66,50 @@ export default function BuyCreditsPage({ user }) {
   // packages doesn't require tearing down and re-rendering the buttons.
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // Same reason: read the currently-applied coupon (if any) at the moment
+  // PayPal calls createOrder, without needing to recreate the buttons.
+  const appliedCouponRef = useRef(appliedCoupon);
+  appliedCouponRef.current = appliedCoupon;
 
   const pack = useMemo(
     () => packages.find((p) => p.credits === selected),
     [selected]
   );
   const totalCredits = pack.credits + (pack.bonus || 0);
+
+  // A coupon's discount was computed against the previously-selected
+  // package's price - switching packages invalidates it, so it has to be
+  // re-applied rather than silently carried over at the wrong amount.
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponStatus("idle");
+    setCouponError("");
+  }, [selected]);
+
+  const applyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    setCouponStatus("checking");
+    setCouponError("");
+    try {
+      const res = await privateApi.post(`${couponUrl}/validate`, {
+        code: couponInput.trim(),
+        credits: selected,
+      });
+      setAppliedCoupon(res.data);
+      setCouponStatus("applied");
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponStatus("error");
+      setCouponError(err.response?.data?.message || "Could not apply this coupon.");
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponStatus("idle");
+    setCouponError("");
+    setCouponInput("");
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -110,6 +153,7 @@ export default function BuyCreditsPage({ user }) {
             try {
               const res = await privateApi.post(`${paymentUrl}/create-order`, {
                 credits: selectedRef.current,
+                couponCode: appliedCouponRef.current?.code,
               });
               return res.data.paypalOrderId;
             } catch (err) {
@@ -295,11 +339,73 @@ export default function BuyCreditsPage({ user }) {
                     <span>+{num(pack.bonus)}</span>
                   </div>
                 )}
+                {appliedCoupon && (
+                  <div className="line">
+                    <span>Coupon ({appliedCoupon.code})</span>
+                    <span>-{money(appliedCoupon.discountAmount)}</span>
+                  </div>
+                )}
                 <div className="line total">
                   <span>Total</span>
-                  <span>{money(pack.price)}</span>
+                  <span>
+                    {money(appliedCoupon ? appliedCoupon.finalPrice : pack.price)}
+                  </span>
                 </div>
               </div>
+
+              {user && (
+                <div className="field">
+                  <label htmlFor="coupon">Coupon code</label>
+                  {appliedCoupon ? (
+                    <div className="coupon">
+                      <input
+                        id="coupon"
+                        className="form-control"
+                        value={appliedCoupon.code}
+                        disabled
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={removeCoupon}
+                        disabled={processing}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="coupon">
+                      <input
+                        id="coupon"
+                        className="form-control"
+                        placeholder="Enter code"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value)}
+                        disabled={processing || couponStatus === "checking"}
+                      />
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={applyCoupon}
+                        disabled={
+                          processing || couponStatus === "checking" || !couponInput.trim()
+                        }
+                      >
+                        {couponStatus === "checking" ? "Checking…" : "Apply"}
+                      </button>
+                    </div>
+                  )}
+                  {couponStatus === "error" && (
+                    <p className="coupon-msg">{couponError}</p>
+                  )}
+                  {couponStatus === "applied" && (
+                    <p className="coupon-msg ok">
+                      Coupon applied — you saved {money(appliedCoupon.discountAmount)}.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {user && (
                 <>

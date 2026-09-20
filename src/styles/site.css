@@ -275,6 +275,8 @@ a:hover { color: var(--green); }
 .summary .line.total { font-weight: 600; color: var(--ink); font-size: 18px; }
 .coupon { display: flex; gap: 8px; }
 .coupon .form-control { flex: 1; }
+.coupon-msg { font-size: 13px; margin: 6px 0 0; color: #b3261e; }
+.coupon-msg.ok { color: var(--green-2); }
 .summary .fine { margin: 14px 0 0; line-height: 1.5; }
 
 /* Footer ----------------------------------------------------------- */
